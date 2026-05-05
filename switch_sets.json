@@ -1,0 +1,68 @@
+[
+  {
+    "label": "Living Room",
+    "type": "light",
+    "command_topic": "home/switches/livingroom/lamp/set",
+    "state_topic": "home/switches/livingroom/lamp/state"
+  },
+  {
+    "label": "Porch Light",
+    "type": "light",
+    "command_topic": "home/switches/porch/light/set",
+    "state_topic": "home/switches/porch/light/state"
+  },
+  {
+    "label": "Tate's Room",
+    "type": "light",
+    "command_topic": "home/switches/tatebedroom/light/set",
+    "state_topic": "home/switches/tatebedroom/light/state"
+  },
+  {
+    "label": "Titus' Room",
+    "type": "light",
+    "command_topic": "home/switches/titusbedroom/light/set",
+    "state_topic": "home/switches/titusbedroom/light/state"
+  },
+  {
+    "label": "Bedroom Light",
+    "type": "light",
+    "command_topic": "home/switches/bedroom/light/set",
+    "state_topic": "home/switches/bedroom/light/state"
+  },
+  {
+    "label": "Stairs",
+    "type": "light",
+    "command_topic": "home/switches/stairs/power/set",
+    "state_topic": "home/switches/stairs/power/state"
+  },
+  {
+    "label": "Shower",
+    "type": "power",
+    "command_topic": "home/switches/shower/power/set",
+    "state_topic": "home/switches/shower/power/state"
+  },
+  {
+    "label": "Home Office",
+    "type": "power",
+    "command_topic": "home/switches/homeoffice/power/set",
+    "state_topic": "home/switches/homeoffice/power/state"
+  },
+  {
+    "label": "Living Room",
+    "type": "power",
+    "command_topic": "home/switches/livingroom/plugs/set",
+    "state_topic": "home/switches/livingroom/plugs/state"
+  },
+  {
+    "label": "Games Plug",
+    "type": "power",
+    "command_topic": "home/switches/frontroom/plugs/set",
+    "state_topic": "home/switches/frontroom/plugs/state"
+  },
+  {
+    "label": "Bedroom Plugs",
+    "type": "power",
+    "command_topic": "home/switches/bedroom/plugs/set",
+    "state_topic": "home/switches/bedroom/plugs/state"
+  }
+]

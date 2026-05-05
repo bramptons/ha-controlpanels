@@ -1,0 +1,56 @@
+{
+  "mqtt": {
+    "broker": "192.168.68.79",
+    "port": 1883,
+    "keepalive": 60
+  },
+  "home_assistant": {
+    "url": "ws://homeassistant.local:8123/api/websocket",
+    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiI2ODM4NzVjNTk3Njc0MjA2OTI5ZDE2YjI0MzZiY2EwZiIsImlhdCI6MTc3NDgyNTEwMCwiZXhwIjoyMDkwMTg1MTAwfQ.qb8hqM0DVdPJA4AUhBWhsTc3G4w2fowTSPM6aU2H1Hg",
+    "poll_interval_seconds": 10
+  },
+  "sensors": [
+    {
+      "label": "Front Door",
+      "entity_id": "binary_sensor.front_door_sensor_open",
+      "kind": "door"
+    },
+    {
+      "label": "Kitchen Door",
+      "entity_id": "binary_sensor.kitchen_sensor_open",
+      "kind": "door"
+    },
+    {
+      "label": "Patio Door",
+      "entity_id": "binary_sensor.patio_doors_sensor_open",
+      "kind": "door"
+    },
+    {
+      "label": "Kitchen Window",
+      "entity_id": "binary_sensor.kitchen_window_sensor_open",
+      "kind": "window"
+    },
+    {
+      "label": "Bay Left Window",
+      "entity_id": "binary_sensor.bay_window_left_sensor_open",
+      "kind": "window"
+    },
+    {
+      "label": "Bay Right Window",
+      "entity_id": "binary_sensor.bay_window_right_sensor_open",
+      "kind": "window"
+    }
+  ],
+  "icons": {
+    "switch_light": "💡",
+    "switch_power": "⚡",
+    "sensor_door": "🚪",
+    "sensor_window": "🪟"
+  },
+  "ui": {
+    "status_max_lines": 2,
+    "status_line_length": 72,
+    "max_tiles_per_row": 4
+  },
+  "debug_logging": true
+}
