@@ -41,7 +41,7 @@
       "kind": "window"
     },
     {
-      "label": "Tate's Room Window",
+      "label": "Tate's Window",
       "entity_id": "binary_sensor.myggbett_door_window_sensor_door",
       "kind": "window"
     }

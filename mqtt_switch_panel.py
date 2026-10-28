@@ -48,6 +48,7 @@ TARGET_WINDOW_HEIGHT = 600
 SWITCH_GRID_COLUMNS = 6
 SWITCH_GRID_ROWS = 3
 MIN_SENSOR_TILE_WIDTH = 160
+SENSOR_GRID_COLUMNS = 4
 MIN_SWITCH_BUTTON_FONT_SIZE = 11
 MAX_SWITCH_BUTTON_FONT_SIZE = 16
 MIN_SWITCH_LABEL_FONT_SIZE = 10
@@ -155,8 +156,7 @@ def parse_sensor_items(data: Any) -> list[dict[str, str]]:
             }
         )
 
-    # Keep a single row of six indicators as requested.
-    return loaded[:6]
+    return loaded
 
 
 def load_json_config(path: Path) -> Any:
@@ -402,7 +402,16 @@ class SwitchPanelApp:
     def refresh_layout(self):
         self.layout_refresh_job = None
         self.arrange_switch_grid()
-        self.arrange_tiles(self.indicator_frame, self.sensor_widgets, MIN_SENSOR_TILE_WIDTH, 6, "sensors", None, SWITCH_GRID_COLUMNS)
+        self.arrange_tiles(
+            self.indicator_frame,
+            self.sensor_widgets,
+            MIN_SENSOR_TILE_WIDTH,
+            6,
+            "sensors",
+            None,
+            SENSOR_GRID_COLUMNS,
+            center_last_row=True,
+        )
         self.update_switch_scaling()
 
     def arrange_switch_grid(self):
@@ -452,6 +461,7 @@ class SwitchPanelApp:
         uniform_name: str,
         available_width: int | None = None,
         max_columns: int | None = None,
+        center_last_row: bool = False,
     ):
         if not widgets:
             return
@@ -465,20 +475,37 @@ class SwitchPanelApp:
             columns = min(columns, max_columns)
         rows = (len(widgets) + columns - 1) // columns
 
-        for column in range(len(widgets)):
+        grid_columns = columns * 2 if center_last_row else columns
+        for column in range(max(len(widgets), grid_columns)):
             container.grid_columnconfigure(column, weight=0, uniform=uniform_name)
         for row in range(len(widgets)):
             container.grid_rowconfigure(row, weight=0)
 
-        for column in range(columns):
+        for column in range(grid_columns):
             container.grid_columnconfigure(column, weight=1, uniform=uniform_name)
         for row in range(rows):
             container.grid_rowconfigure(row, weight=1)
 
         for index, widget in enumerate(widgets):
             row = index // columns
-            column = index % columns
-            widget.grid(row=row, column=column, padx=horizontal_padding, pady=6, sticky="nsew")
+            column_index = index % columns
+            column = column_index
+            columnspan = 1
+            if center_last_row:
+                columnspan = 2
+                if row == rows - 1:
+                    items_in_row = len(widgets) - row * columns
+                    column = columns - items_in_row + column_index * 2
+                else:
+                    column = column_index * 2
+            widget.grid(
+                row=row,
+                column=column,
+                columnspan=columnspan,
+                padx=horizontal_padding,
+                pady=6,
+                sticky="nsew",
+            )
 
     def connect_mqtt(self):
         broker = self.mqtt_config["broker"]
