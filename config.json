@@ -39,6 +39,11 @@
       "label": "Bay Right Window",
       "entity_id": "binary_sensor.bay_window_right_sensor_open",
       "kind": "window"
+    },
+    {
+      "label": "Tate's Room Window",
+      "entity_id": "binary_sensor.myggbett_door_window_sensor_door",
+      "kind": "window"
     }
   ],
   "icons": {

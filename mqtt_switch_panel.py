@@ -98,14 +98,16 @@ def parse_switch_sets(data: Any) -> list[dict[str, str]]:
         if not isinstance(state_topic, str) or not state_topic.strip():
             continue
 
-        loaded.append(
-            {
+        parsed_item = {
                 "label": label.strip(),
                 "type": switch_type,
                 "command_topic": command_topic.strip(),
                 "state_topic": state_topic.strip(),
             }
-        )
+        entity_id = item.get("entity_id")
+        if isinstance(entity_id, str) and entity_id.strip():
+            parsed_item["entity_id"] = entity_id.strip()
+        loaded.append(parsed_item)
 
     return loaded
 
@@ -246,9 +248,10 @@ class SwitchPanelApp:
         self.root.maxsize(TARGET_WINDOW_WIDTH, TARGET_WINDOW_HEIGHT)
         self.root.configure(bg=APP_BG_COLOR)
         self.ha_stop_event = threading.Event()
+        self.ha_refresh_event = threading.Event()
+        self.ha_polling_enabled = False
         self.sensor_ui: dict[str, dict[str, Any]] = {}
         self.layout_refresh_job: str | None = None
-        self.ignore_retained_until = 0.0
 
         self.root.grid_rowconfigure(1, weight=3)
         self.root.grid_rowconfigure(2, weight=1)
@@ -347,8 +350,10 @@ class SwitchPanelApp:
             font=("Segoe UI", 9),
             bg=APP_BG_COLOR,
             fg=APP_FG_COLOR,
+            cursor="hand2",
         )
         self.ws_status_label.grid(row=4, column=0, sticky="ew", pady=(0, 10), padx=16)
+        self.ws_status_label.bind("<Button-1>", self.refresh_home_assistant_states)
 
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.client.on_connect = self.on_connect
@@ -490,8 +495,6 @@ class SwitchPanelApp:
 
     def on_connect(self, client, userdata, flags, reason_code, properties):
         if reason_code == 0:
-            # Keep startup state as UNKNOWN and ignore retained snapshots briefly.
-            self.ignore_retained_until = time.monotonic() + 2.0
             self.log(f"MQTT: connected (reason_code={reason_code})")
             for config in self.switch_sets:
                 client.subscribe(config["state_topic"])
@@ -508,10 +511,6 @@ class SwitchPanelApp:
         self.root.after(0, lambda: self.info_label.config(text=f"Disconnected from broker ({reason_code})"))
 
     def on_message(self, client, userdata, message):
-        if message.retain and time.monotonic() < self.ignore_retained_until:
-            self.log(f"MQTT: ignoring retained startup message on {message.topic}")
-            return
-
         payload = message.payload.decode("utf-8", errors="ignore").strip().lower()
         if payload not in {"on", "off"}:
             self.log(f"MQTT: ignored unsupported payload on {message.topic}: {payload!r}")
@@ -536,7 +535,12 @@ class SwitchPanelApp:
     def toggle_switch(self, switch_index: int):
         ui = self.switch_ui[switch_index]
         current_state = ui["current_state"]
-        next_command = "off" if current_state == "on" else "on"
+        if current_state == "on":
+            next_command = "off"
+        elif current_state == "off":
+            next_command = "on"
+        else:
+            next_command = "toggle"
         self.send_command(ui["command_topic"], next_command)
 
     def apply_switch_button_style(self, switch_index: int, state: str):
@@ -556,9 +560,9 @@ class SwitchPanelApp:
         self.apply_switch_button_style(switch_index, state)
 
     def start_home_assistant_sensor_updates(self):
-        if not self.sensor_items:
-            self.log("WS: sensor polling disabled (no sensors configured)")
-            self.ws_status_label.config(text="Home Assistant WS: NO SENSORS CONFIGURED")
+        if not self.sensor_items and not self.switch_sets:
+            self.log("WS: state polling disabled (no devices or sensors configured)")
+            self.ws_status_label.config(text="Home Assistant WS: NOTHING CONFIGURED")
             return
 
         url = self.home_assistant_config.get("url", "")
@@ -575,8 +579,30 @@ class SwitchPanelApp:
             return
 
         self.ws_status_label.config(text="Home Assistant WS: CONNECTING")
-        sensor_thread = threading.Thread(target=self.poll_home_assistant_states_loop, daemon=True)
-        sensor_thread.start()
+        self.ha_polling_enabled = True
+        state_thread = threading.Thread(target=self.poll_home_assistant_states_loop, daemon=True)
+        state_thread.start()
+
+    def refresh_home_assistant_states(self, _event=None):
+        """Wake the polling thread for an immediate device and sensor refresh."""
+        if self.ha_stop_event.is_set():
+            return
+        self.log("Status: manual MQTT and Home Assistant refresh requested")
+        self.refresh_mqtt_switch_states()
+        if self.ha_polling_enabled:
+            self.ws_status_label.config(text="Home Assistant WS: REFRESHING DEVICES + SENSORS...")
+            self.ha_refresh_event.set()
+
+    def refresh_mqtt_switch_states(self):
+        """Re-subscribe so the broker sends each retained switch state again."""
+        if not self.client.is_connected():
+            self.log("MQTT: state refresh skipped because broker is disconnected")
+            return
+        for config in self.switch_sets:
+            topic = config["state_topic"]
+            self.client.unsubscribe(topic)
+            self.client.subscribe(topic)
+            self.log(f"MQTT: requested retained state for {topic}")
 
     def poll_home_assistant_states_loop(self):
         poll_interval = int(self.home_assistant_config.get("poll_interval_seconds", 10))
@@ -587,8 +613,9 @@ class SwitchPanelApp:
             self.log(f"WS: poll result status={status}, states={len(states)}")
             self.root.after(0, lambda value=status: self.ws_status_label.config(text=self.format_ws_status(value)))
             if states:
-                self.root.after(0, lambda new_states=states: self.apply_sensor_states(new_states))
-            self.ha_stop_event.wait(poll_interval)
+                self.root.after(0, lambda new_states=states: self.apply_home_assistant_states(new_states))
+            self.ha_refresh_event.wait(poll_interval)
+            self.ha_refresh_event.clear()
 
     def format_ws_status(self, status: str) -> str:
         max_length = 120
@@ -606,8 +633,9 @@ class SwitchPanelApp:
             return {}, "TOKEN MISSING"
 
         requested_entities = set(self.sensor_ui.keys())
-        if not requested_entities:
-            return {}, "NO SENSORS"
+        requested_entities.update(
+            config["entity_id"] for config in self.switch_sets if config.get("entity_id")
+        )
 
         try:
             self.log(f"WS: opening connection to {url}")
@@ -669,6 +697,21 @@ class SwitchPanelApp:
                 bg=style["bg"],
                 fg=style["fg"],
             )
+
+    def apply_home_assistant_states(self, states: dict[str, str]):
+        self.apply_sensor_states(states)
+
+        for index, config in enumerate(self.switch_sets):
+            entity_id = config.get("entity_id")
+            if not entity_id:
+                # MQTT is authoritative when no HA entity is explicitly configured.
+                continue
+
+            state = states.get(entity_id, "").strip().lower()
+            if state in {"on", "off"}:
+                self.apply_state(index, state)
+            else:
+                self.log(f"WS: no usable state for {config['label']} ({entity_id})")
 
     def reset_all_switches_to_unknown(self):
         """Reset all switches to unknown state on startup."""

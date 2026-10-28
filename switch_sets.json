@@ -2,66 +2,77 @@
   {
     "label": "Living Room",
     "type": "light",
+    "entity_id": "light.calex_a60_rgb_cct",
     "command_topic": "home/switches/livingroom/lamp/set",
     "state_topic": "home/switches/livingroom/lamp/state"
   },
   {
     "label": "Porch Light",
     "type": "light",
+    "entity_id": "light.porch_2",
     "command_topic": "home/switches/porch/light/set",
     "state_topic": "home/switches/porch/light/state"
   },
   {
     "label": "Tate's Room",
     "type": "light",
+    "entity_id": "light.tate_s_light",
     "command_topic": "home/switches/tatebedroom/light/set",
     "state_topic": "home/switches/tatebedroom/light/state"
   },
   {
     "label": "Titus' Room",
     "type": "light",
+    "entity_id": "light.titus_globe",
     "command_topic": "home/switches/titusbedroom/light/set",
     "state_topic": "home/switches/titusbedroom/light/state"
   },
   {
     "label": "Bedroom Light",
     "type": "light",
+    "entity_id": "light.kajplats_e27_ws_g60_clear_470lm",
     "command_topic": "home/switches/bedroom/light/set",
     "state_topic": "home/switches/bedroom/light/state"
   },
   {
     "label": "Stairs",
     "type": "light",
+    "entity_id": "light.wiz_rgbww_tunable_a3e6de",
     "command_topic": "home/switches/stairs/power/set",
     "state_topic": "home/switches/stairs/power/state"
   },
   {
     "label": "Shower",
     "type": "power",
+    "entity_id": "switch.shower_socket_1",
     "command_topic": "home/switches/shower/power/set",
     "state_topic": "home/switches/shower/power/state"
   },
   {
     "label": "Home Office",
     "type": "power",
+    "entity_id": "switch.smart_wi_fi_plug_2",
     "command_topic": "home/switches/homeoffice/power/set",
     "state_topic": "home/switches/homeoffice/power/state"
   },
   {
-    "label": "Living Room",
+    "label": "3D Printer",
     "type": "power",
+    "entity_id": "switch.smart_wi_fi_plug_4",
     "command_topic": "home/switches/livingroom/plugs/set",
     "state_topic": "home/switches/livingroom/plugs/state"
   },
   {
     "label": "Games Plug",
     "type": "power",
+    "entity_id": "switch.smart_wi_fi_plug",
     "command_topic": "home/switches/frontroom/plugs/set",
     "state_topic": "home/switches/frontroom/plugs/state"
   },
   {
     "label": "Bedroom Plugs",
     "type": "power",
+    "entity_id": "switch.smart_wi_fi_plug_3",
     "command_topic": "home/switches/bedroom/plugs/set",
     "state_topic": "home/switches/bedroom/plugs/state"
   }

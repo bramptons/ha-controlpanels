@@ -11,6 +11,40 @@ A lightweight touchscreen-friendly control panel for Home Assistant MQTT switche
 - **Live Status Display**: Real-time MQTT and WebSocket connection status
 - **No Hardcoding**: Shared settings live in config.json and switches stay in switch_sets.json
 
+## Application Architecture
+
+```mermaid
+flowchart TD
+    SwitchSets["switch_sets.json<br/>MQTT topics + optional HA entity IDs"]
+    Config["config.json<br/>MQTT + Home Assistant connection"]
+    App["Python application"]
+    UI["Tkinter control panel<br/>switches start UNKNOWN"]
+    MQTT["MQTT broker"]
+    HA["Home Assistant"]
+
+    SwitchSets --> App
+    Config --> App
+    App --> UI
+
+    App -->|"subscribe to state_topic"| MQTT
+    MQTT -->|"retained or live on/off state"| App
+    App -->|"update mapped switch UI"| UI
+
+    App -->|"WebSocket auth + get_states<br/>at startup and each poll interval"| HA
+    HA -->|"current entity states"| App
+    App -->|"update sensors and switches<br/>with configured entity_id"| UI
+
+    UI -->|"user selects switch"| App
+    App -->|"publish command_topic<br/>(on/off/toggle)"| MQTT
+    MQTT -->|"device or automation acts"| HA
+
+    UI -->|"click WS status to refresh"| App
+    App -->|"re-subscribe for retained state"| MQTT
+    App -->|"request immediate state query"| HA
+```
+
+At startup, switch tiles remain **UNKNOWN** until a valid state arrives from MQTT or Home Assistant. Home Assistant switch states can only be matched when the switch has an `entity_id` configured; missing IDs or unavailable/unrecognized states leave the tile UNKNOWN. MQTT states are matched by `state_topic`.
+
 ## Installation
 
 ### Prerequisites
@@ -48,13 +82,14 @@ Configuration is split across two JSON files. No code changes needed.
 
 ### Switches
 
-Add switches in switch_sets.json. Each switch requires label, type, command_topic, and state_topic:
+Add switches in switch_sets.json. Each switch requires `label`, `type`, `command_topic`, and `state_topic`. Fill in the optional `entity_id` with the matching Home Assistant entity if you want Home Assistant to initialize that tile with its current state. An empty `entity_id` is ignored:
 
 ```json
 [
   {
     "label": "Living Room Lamp",
     "type": "light",
+    "entity_id": "light.living_room",
     "command_topic": "home/switches/livingroom/lamp/set",
     "state_topic": "home/switches/livingroom/lamp/state"
   },
@@ -128,6 +163,12 @@ Configure WebSocket connection to Home Assistant for sensor updates:
 - **url**: WebSocket URL to Home Assistant instance
 - **access_token**: Long-lived access token (create in Home Assistant > Settings > Users > Create token)
 - **poll_interval_seconds**: Query interval for sensor updates (minimum 5 seconds)
+
+Sensor states and switches with a non-empty `entity_id` are queried from Home Assistant immediately at startup and then at the configured interval. Switches without an entity ID can still get their state from MQTT messages on `state_topic`; the application does not guess Home Assistant entity names. If neither source provides a valid `on` or `off` state, the switch stays UNKNOWN. Tap the `Home Assistant WS` status text at the bottom of the panel to refresh MQTT device states and Home Assistant sensor and switch states immediately.
+
+For reliable MQTT startup status, configure the Home Assistant MQTT entity or publishing automation to retain messages on each switch `state_topic`.
+
+Tapping a switch sends `off` when its current state is on, `on` when it is off, and `toggle` when its state is unknown. The MQTT device or automation handling `command_topic` must support the `toggle` payload.
 
 ## MQTT Broker
 
