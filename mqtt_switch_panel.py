@@ -51,11 +51,13 @@ MIN_SENSOR_TILE_WIDTH = 160
 SENSOR_GRID_COLUMNS = 4
 MIN_SWITCH_BUTTON_FONT_SIZE = 11
 MAX_SWITCH_BUTTON_FONT_SIZE = 16
-MIN_SWITCH_LABEL_FONT_SIZE = 10
-MAX_SWITCH_LABEL_FONT_SIZE = 13
-MIN_SWITCH_STATE_FONT_SIZE = 9
-MAX_SWITCH_STATE_FONT_SIZE = 11
 DEBUG_LOGGING = True
+
+LIGHT_SWITCH_COLORS = {
+    "on": "#fff2b3",
+    "off": "#616161",
+    "unknown": "#424242",
+}
 
 SWITCH_BUTTON_STYLES = {
     "on": {
@@ -235,6 +237,16 @@ def classify_sensor_state(raw_state: str) -> str:
     return "unknown"
 
 
+def normalize_rgb_color(value: Any) -> str | None:
+    if not isinstance(value, (list, tuple)) or len(value) != 3:
+        return None
+    if any(not isinstance(channel, (int, float)) or isinstance(channel, bool) for channel in value):
+        return None
+
+    red, green, blue = (max(0, min(255, round(channel))) for channel in value)
+    return f"#{red:02x}{green:02x}{blue:02x}"
+
+
 def clamp(value: int, minimum: int, maximum: int) -> int:
     return max(minimum, min(value, maximum))
 
@@ -271,34 +283,31 @@ class SwitchPanelApp:
 
         for index, config in enumerate(self.switch_sets):
             switch_icon = get_switch_icon(config["type"], self.icons)
+            button_text = f"{switch_icon} {config['label']}"
             set_frame = tk.Frame(self.frame, bg=APP_BG_COLOR)
 
             set_frame.grid_columnconfigure(0, weight=1)
-            set_frame.grid_rowconfigure(1, weight=1)
-
-            switch_label = tk.Label(set_frame, text=f"{switch_icon} {config['label']}", font=("Segoe UI", 11, "bold"), bg=APP_BG_COLOR, fg=APP_FG_COLOR)
-            switch_label.grid(row=0, column=0, pady=(0, 8))
+            set_frame.grid_rowconfigure(0, weight=1)
 
             toggle_button = tk.Button(
                 set_frame,
-                text="UNKNOWN",
+                text=button_text,
                 font=("Segoe UI", 12, "bold"),
                 bg=SWITCH_BUTTON_STYLES["unknown"]["bg"],
                 fg="white",
                 activebackground=SWITCH_BUTTON_STYLES["unknown"]["activebackground"],
                 command=lambda idx=index: self.toggle_switch(idx),
             )
-            toggle_button.grid(row=1, column=0, pady=(0, 8), sticky="nsew")
-
-            state_label = tk.Label(set_frame, text="State: UNKNOWN", font=("Segoe UI", 10, "bold"), bg=APP_BG_COLOR, fg=APP_FG_COLOR)
-            state_label.grid(row=2, column=0)
+            toggle_button.grid(row=0, column=0, pady=(0, 8), sticky="nsew")
 
             self.switch_ui.append(
                 {
                     "current_state": "unknown",
-                    "switch_label": switch_label,
+                    "label": config["label"],
+                    "button_text": button_text,
+                    "type": config["type"],
+                    "rgb_color": None,
                     "toggle_button": toggle_button,
-                    "state_label": state_label,
                     "command_topic": config["command_topic"],
                 }
             )
@@ -346,7 +355,7 @@ class SwitchPanelApp:
 
         self.ws_status_label = tk.Label(
             root,
-            text="Home Assistant WS: DISCONNECTED",
+            text="Home Assistant: DISCONNECTED",
             font=("Segoe UI", 9),
             bg=APP_BG_COLOR,
             fg=APP_FG_COLOR,
@@ -444,13 +453,13 @@ class SwitchPanelApp:
         tile_width = max((available_width - total_horizontal_padding) // columns, 80)
 
         button_font_size = clamp(tile_width // 15, MIN_SWITCH_BUTTON_FONT_SIZE, MAX_SWITCH_BUTTON_FONT_SIZE)
-        label_font_size = clamp(tile_width // 18, MIN_SWITCH_LABEL_FONT_SIZE, MAX_SWITCH_LABEL_FONT_SIZE)
-        state_font_size = clamp(tile_width // 22, MIN_SWITCH_STATE_FONT_SIZE, MAX_SWITCH_STATE_FONT_SIZE)
 
         for ui in self.switch_ui:
-            ui["switch_label"].config(font=("Segoe UI", label_font_size, "bold"), wraplength=max(tile_width - 24, 120))
-            ui["toggle_button"].config(font=("Segoe UI", button_font_size, "bold"))
-            ui["state_label"].config(font=("Segoe UI", state_font_size, "bold"), wraplength=max(tile_width - 24, 120))
+            ui["toggle_button"].config(
+                text=ui["button_text"],
+                font=("Segoe UI", button_font_size, "bold"),
+                wraplength=max(tile_width - 24, 120),
+            )
 
     def arrange_tiles(
         self,
@@ -572,24 +581,35 @@ class SwitchPanelApp:
 
     def apply_switch_button_style(self, switch_index: int, state: str):
         ui = self.switch_ui[switch_index]
-        style = SWITCH_BUTTON_STYLES.get(state, SWITCH_BUTTON_STYLES["unknown"])
+        if ui["type"] == "light":
+            background = (
+                ui["rgb_color"] or LIGHT_SWITCH_COLORS["on"]
+                if state == "on"
+                else LIGHT_SWITCH_COLORS.get(state, LIGHT_SWITCH_COLORS["unknown"])
+            )
+            foreground = "#222222" if state == "on" else "white"
+        else:
+            style = SWITCH_BUTTON_STYLES.get(state, SWITCH_BUTTON_STYLES["unknown"])
+            background = style["bg"]
+            foreground = "white"
+
         ui["toggle_button"].config(
-            text=style["text"],
-            bg=style["bg"],
-            activebackground=style["activebackground"],
+            text=ui["button_text"],
+            bg=background,
+            fg=foreground,
+            activebackground=background,
             relief="sunken" if state in {"on", "off"} else "raised",
         )
 
     def apply_state(self, switch_index: int, state: str):
         ui = self.switch_ui[switch_index]
         ui["current_state"] = state
-        ui["state_label"].config(text=f"State: {state.upper()}")
         self.apply_switch_button_style(switch_index, state)
 
     def start_home_assistant_sensor_updates(self):
         if not self.sensor_items and not self.switch_sets:
             self.log("WS: state polling disabled (no devices or sensors configured)")
-            self.ws_status_label.config(text="Home Assistant WS: NOTHING CONFIGURED")
+            self.ws_status_label.config(text="Home Assistant: NOTHING CONFIGURED")
             return
 
         url = self.home_assistant_config.get("url", "")
@@ -597,15 +617,15 @@ class SwitchPanelApp:
         if not isinstance(url, str) or not url.strip():
             self.log("WS: URL missing in switch_sets.json")
             self.info_label.config(text="Home Assistant URL missing in switch_sets.json")
-            self.ws_status_label.config(text="Home Assistant WS: URL MISSING")
+            self.ws_status_label.config(text="Home Assistant: URL MISSING")
             return
         if not isinstance(access_token, str) or not access_token.strip():
             self.log("WS: access_token missing in switch_sets.json")
             self.info_label.config(text="Home Assistant token missing in switch_sets.json")
-            self.ws_status_label.config(text="Home Assistant WS: TOKEN MISSING")
+            self.ws_status_label.config(text="Home Assistant: TOKEN MISSING")
             return
 
-        self.ws_status_label.config(text="Home Assistant WS: CONNECTING")
+        self.ws_status_label.config(text="Home Assistant: CONNECTING")
         self.ha_polling_enabled = True
         state_thread = threading.Thread(target=self.poll_home_assistant_states_loop, daemon=True)
         state_thread.start()
@@ -617,7 +637,7 @@ class SwitchPanelApp:
         self.log("Status: manual MQTT and Home Assistant refresh requested")
         self.refresh_mqtt_switch_states()
         if self.ha_polling_enabled:
-            self.ws_status_label.config(text="Home Assistant WS: REFRESHING DEVICES + SENSORS...")
+            self.ws_status_label.config(text="Home Assistant: REFRESHING DEVICES + SENSORS...")
             self.ha_refresh_event.set()
 
     def refresh_mqtt_switch_states(self):
@@ -648,9 +668,9 @@ class SwitchPanelApp:
         max_length = 120
         if len(status) > max_length:
             status = status[: max_length - 3] + "..."
-        return f"Home Assistant WS: {status}"
+        return f"Home Assistant: {status}"
 
-    def get_device_states_from_home_assistant(self) -> tuple[dict[str, str], str]:
+    def get_device_states_from_home_assistant(self) -> tuple[dict[str, dict[str, Any]], str]:
         url = self.home_assistant_config.get("url", "")
         access_token = self.home_assistant_config.get("access_token", "")
 
@@ -695,7 +715,7 @@ class SwitchPanelApp:
                     query_message = query_error.get("message", "unknown query error")
                     return {}, f"QUERY FAILED ({query_message})"
 
-                states: dict[str, str] = {}
+                states: dict[str, dict[str, Any]] = {}
                 for item in response.get("result", []):
                     if not isinstance(item, dict):
                         continue
@@ -704,7 +724,11 @@ class SwitchPanelApp:
                     if not isinstance(entity_id, str) or not isinstance(state, str):
                         continue
                     if entity_id in requested_entities:
-                        states[entity_id] = state
+                        attributes = item.get("attributes", {})
+                        states[entity_id] = {
+                            "state": state,
+                            "attributes": attributes if isinstance(attributes, dict) else {},
+                        }
 
                 ws.close()
                 return states, "CONNECTED"
@@ -712,9 +736,10 @@ class SwitchPanelApp:
             self.log(f"WS: connection/query error ({type(exc).__name__}): {exc}")
             return {}, f"DISCONNECTED ({type(exc).__name__}: {exc})"
 
-    def apply_sensor_states(self, states: dict[str, str]):
+    def apply_sensor_states(self, states: dict[str, dict[str, Any]]):
         for entity_id, ui in self.sensor_ui.items():
-            raw_state = states.get(entity_id, "unknown")
+            entity_state = states.get(entity_id, {})
+            raw_state = entity_state.get("state", "unknown")
             status_key = classify_sensor_state(raw_state)
             style = SENSOR_STATUS_STYLES[status_key]
             icon = get_sensor_icon(ui["kind"], self.icons)
@@ -725,7 +750,7 @@ class SwitchPanelApp:
                 fg=style["fg"],
             )
 
-    def apply_home_assistant_states(self, states: dict[str, str]):
+    def apply_home_assistant_states(self, states: dict[str, dict[str, Any]]):
         self.apply_sensor_states(states)
 
         for index, config in enumerate(self.switch_sets):
@@ -734,7 +759,13 @@ class SwitchPanelApp:
                 # MQTT is authoritative when no HA entity is explicitly configured.
                 continue
 
-            state = states.get(entity_id, "").strip().lower()
+            entity_state = states.get(entity_id, {})
+            raw_state = entity_state.get("state", "")
+            state = raw_state.strip().lower() if isinstance(raw_state, str) else ""
+            attributes = entity_state.get("attributes", {})
+            self.switch_ui[index]["rgb_color"] = normalize_rgb_color(
+                attributes.get("rgb_color") if isinstance(attributes, dict) else None
+            )
             if state in {"on", "off"}:
                 self.apply_state(index, state)
             else:
@@ -744,7 +775,7 @@ class SwitchPanelApp:
         """Reset all switches to unknown state on startup."""
         for index, ui in enumerate(self.switch_ui):
             ui["current_state"] = "unknown"
-            ui["state_label"].config(text="State: UNKNOWN")
+            ui["rgb_color"] = None
             self.apply_switch_button_style(index, "unknown")
 
     def on_close(self):
